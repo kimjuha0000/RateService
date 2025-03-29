@@ -48,6 +48,31 @@ def store_movie_reviews_in_db(reviews, movie_id, conn):
             print(f"영화 ID {movie_id} 리뷰 저장 실패:", e)
     cursor.close()
 
+def remove_duplicate_reviews(conn):
+    """
+    movie_reviews 테이블에서 중복된 리뷰를 제거합니다.
+    같은 movie_id와 review_text를 가진 리뷰 중, 가장 작은 review_id를 남기고 나머지를 삭제합니다.
+    """
+    cursor = conn.cursor()
+    delete_sql = """
+    DELETE FROM movie_reviews
+    WHERE review_id IN (
+      SELECT review_id FROM (
+        SELECT review_id,
+               ROW_NUMBER() OVER (PARTITION BY movie_id, review_text ORDER BY review_id) AS rn
+        FROM movie_reviews
+      )
+      WHERE rn > 1
+    )
+    """
+    try:
+        cursor.execute(delete_sql)
+        conn.commit()
+        print("중복 리뷰 제거 완료")
+    except cx_Oracle.DatabaseError as e:
+        print("중복 리뷰 제거 실패:", e)
+    cursor.close()
+
 def main():
     # DB에 저장된 모든 영화 정보를 가져옵니다.
     movies = get_all_movies(conn)
@@ -55,7 +80,6 @@ def main():
 
     failed_movies = []  # 오류가 발생한 영화의 movie_id를 저장할 리스트
 
-    
     for movie_id, title in movies:
         print(f"\n[영화 처리] movie_id: {movie_id}, title: {title}")
         # 영화 제목에 "관람평"을 추가한 후 URL 인코딩
@@ -66,17 +90,20 @@ def main():
             reviews = test_crawling(encoded)
         except Exception as e:
             print(f"영화 '{title}' (movie_id: {movie_id}) 크롤링 실패: {e}")
-            failed_movies.append(movie_id)  # 실패한 영화의 movie_id 저장
-            continue  # 오류 발생 시 해당 영화 건너뛰기
+            failed_movies.append(movie_id)
+            continue
         
         if reviews is None or len(reviews) == 0:
             print(f"영화 '{title}' (movie_id: {movie_id})에 대해 크롤링된 리뷰가 없습니다.")
-            failed_movies.append(movie_id)  # 리뷰가 없는 영화도 실패로 간주하여 저장
+            failed_movies.append(movie_id)
             continue
 
         print(f"크롤링한 리뷰 개수: {len(reviews)}")
         # 리뷰 저장
         store_movie_reviews_in_db(reviews, movie_id, conn)
+    
+    # 전체 리뷰 저장 후, 중복 리뷰 제거 실행
+    remove_duplicate_reviews(conn)
     
     conn.close()
 
@@ -85,7 +112,7 @@ def main():
         for movie_id in failed_movies:
             print(f"movie_id: {movie_id}")
 
-    print("모든 영화 리뷰가 DB에 저장되었습니다.")
+    print("모든 영화 리뷰가 DB에 저장되었으며, 중복 리뷰 제거 작업이 완료되었습니다.")
 
 if __name__ == "__main__":
     main()

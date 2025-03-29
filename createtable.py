@@ -25,7 +25,19 @@ def create_tables():
             FOREIGN KEY(movie_id) REFERENCES movies(movie_id)
         )
     """
-    
+    create_score_sql = """CREATE TABLE movie_sentiment_scores (
+    score_id     NUMBER GENERATED ALWAYS AS IDENTITY,
+    movie_id     NUMBER NOT NULL,
+    avg_score    NUMBER(5,2), -- 0.00 ~ 100.00
+    review_count NUMBER,
+    insert_date  DATE DEFAULT SYSDATE,
+    PRIMARY KEY(score_id),
+    FOREIGN KEY(movie_id) REFERENCES movies(movie_id)
+    )"""
+
+
+
+
     try:
         cursor.execute(create_movies_sql)
         print("Movies 테이블 생성 성공")
@@ -37,6 +49,12 @@ def create_tables():
         print("movie_reviews 테이블 생성 성공")
     except cx_Oracle.DatabaseError as e:
         print("movie_reviews 테이블 생성 실패:", e)
+
+    try:
+        cursor.execute(create_score_sql)
+        print("movie_movie_sentiment_scores 테이블 생성 성공")
+    except cx_Oracle.DatabaseError as e:
+        print("movie_movie_sentiment_scores 테이블 생성 실패:", e)
     
     conn.commit()
     cursor.close()
